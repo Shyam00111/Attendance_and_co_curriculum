@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { BookOpen, Loader2 } from 'lucide-react';
+import { Axis3DIcon, BookOpen, Loader2 } from 'lucide-react';
 
 const Login: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -18,14 +19,32 @@ const Login: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  const BACKEND_URL = import.meta.env.VITE_Backend_Url;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
       if (isLogin) {
-        const success = await login(email, password);
-        if (success) {
+          const loginResponse = await axios.post(`${BACKEND_URL}auth/login`, {
+            name: name.trim(),
+            email: email.trim(),
+            password,
+            role: 'teacher',
+          });
+        if (loginResponse.status === 201 || loginResponse.status === 200) {
+            if (loginResponse.data.data) {
+              const user = loginResponse.data.data;
+              localStorage.setItem('attendance_app_user', JSON.stringify(user));
+              localStorage.setItem('attendance_app_token', loginResponse.data.token);
+              
+              toast({
+                title: "Account created!",
+                description: "You have been registered and logged in.",
+              });
+              navigate('/dashboard');
+            }
           toast({
             title: "Welcome back!",
             description: "You have successfully logged in.",
@@ -48,17 +67,38 @@ const Login: React.FC = () => {
           setIsLoading(false);
           return;
         }
-        const success = await register(name, email, password, 'teacher');
-        if (success) {
-          toast({
-            title: "Account created!",
-            description: "You have been registered and logged in.",
+        try {
+          const response = await axios.post(`${BACKEND_URL}auth/register`, {
+            name: name.trim(),
+            email: email.trim(),
+            password,
+            role: 'teacher',
           });
-          navigate('/dashboard');
-        } else {
+
+          if (response.status === 201 || response.status === 200) {
+            // Auto-login after registration
+            const loginResponse = await axios.post(`${BACKEND_URL}auth/login`, {
+              email: email.trim(),
+              password,
+            });
+
+            if (loginResponse.data.data) {
+              const user = loginResponse.data.data;
+              localStorage.setItem('attendance_app_user', JSON.stringify(user));
+              localStorage.setItem('attendance_app_token', loginResponse.data.token);
+              
+              toast({
+                title: "Account created!",
+                description: "You have been registered and logged in.",
+              });
+              navigate('/dashboard');
+            }
+          }
+        } catch (error: any) {
+          const errorMessage = error.response?.data?.message || 'Email already exists. Please try a different email.';
           toast({
             title: "Registration failed",
-            description: "Email already exists. Please try a different email.",
+            description: errorMessage,
             variant: "destructive",
           });
         }

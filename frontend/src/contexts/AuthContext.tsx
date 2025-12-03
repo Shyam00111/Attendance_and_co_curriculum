@@ -7,6 +7,7 @@ const AuthContext = createContext<AuthState | undefined>(undefined);
 
 // Storage keys
 const AUTH_USER_KEY = 'attendance_app_user';
+const AUTH_USER_TOKEN = 'attendance_app_token';
 const USERS_KEY = 'attendance_app_users';
 
 // Provider component
@@ -95,9 +96,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Logout function
   const logout = () => {
+    console.log('Logout called')
     setUser(null);
     setIsAuthenticated(false);
     localStorage.removeItem(AUTH_USER_KEY);
+    localStorage.removeItem(AUTH_USER_TOKEN);
   };
 
   return (

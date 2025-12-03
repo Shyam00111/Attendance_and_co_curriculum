@@ -17,7 +17,8 @@ const queryClient = new QueryClient();
 
 // Protected Route wrapper
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated } = useAuth();
+
+  const  isAuthenticated  = localStorage.getItem('attendance_app_token') !== null;
   
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
