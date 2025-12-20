@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
+import ThemeToggle from '@/components/ThemeToggle';
 import {
   LayoutDashboard,
   ClipboardCheck,
@@ -12,6 +13,12 @@ import {
   Menu,
   X,
   User,
+  Users,
+  BookMarked,
+  Award,
+  MessageCircle,
+  Download,
+  Bell,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -19,19 +26,48 @@ interface DashboardLayoutProps {
   children: React.ReactNode;
 }
 
-const navItems = [
-  { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/attendance/mark', label: 'Mark Attendance', icon: ClipboardCheck },
-  { path: '/attendance/report', label: 'Attendance Report', icon: FileText },
-  { path: '/activity/add', label: 'Add Activity', icon: Trophy },
-  { path: '/activity/list', label: 'Activity List', icon: List },
-];
+const getNavItems = (role?: string) => {
+  const baseItems = [
+    { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/student-stats', label: 'Student Stats', icon: Trophy },
+    { path: '/chatbot', label: 'Assistant', icon: MessageCircle },
+    { path: '/notifications', label: 'Notifications', icon: Bell },
+    { path: '/export', label: 'Export Reports', icon: Download },
+  ];
+
+  const teacherItems = [
+    { path: '/students', label: 'Manage Students', icon: Users },
+    { path: '/student-subjects', label: 'Assign Subjects', icon: BookMarked },
+    { path: '/curriculum', label: 'Curriculum', icon: BookMarked },
+    { path: '/attendance/mark', label: 'Mark Attendance', icon: ClipboardCheck },
+    { path: '/attendance/report', label: 'Attendance Report', icon: FileText },
+    { path: '/activity/add', label: 'Add Activity', icon: Trophy },
+    { path: '/activity/list', label: 'Activity List', icon: List },
+    { path: '/certificates', label: 'Certificates', icon: Award },
+  ];
+
+  const studentItems = [
+    { path: '/attendance/report', label: 'My Attendance', icon: FileText },
+    { path: '/activity/list', label: 'My Activities', icon: List },
+  ];
+
+  if (role === 'teacher') {
+    return [...baseItems, ...teacherItems];
+  } else if (role === 'student') {
+    return [...baseItems, ...studentItems];
+  } else if (role === 'admin') {
+    return [...baseItems, ...teacherItems];
+  }
+
+  return baseItems;
+};
 
 const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const navItems = getNavItems(user?.role);
 
   const handleLogout = () => {
     logout();
@@ -41,7 +77,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   return (
     <div className="min-h-screen bg-background">
       {/* Mobile header */}
-      <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b bg-card px-4 lg:hidden">
+      <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-border bg-card/80 backdrop-blur-sm px-4 lg:hidden glass">
         <Button
           variant="ghost"
           size="icon"
@@ -52,7 +88,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
         <span className="font-display font-semibold text-foreground">
           Attendance System
         </span>
-        <div className="w-10" /> {/* Spacer for centering */}
+        <ThemeToggle />
       </header>
 
       {/* Mobile sidebar overlay */}
@@ -103,7 +139,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 space-y-1 px-3">
+        <nav className="flex-1 overflow-y-auto space-y-1 px-3">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path;
             const Icon = item.icon;

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,11 +9,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { mockStudents, mockActivities, activityCategories } from '@/data/mockData';
-import { Activity } from '@/types';
+import { Activity, User } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { Trophy, Save, Loader2 } from 'lucide-react';
 
 const ActivityAdd: React.FC = () => {
+  const [students, setStudents] = useState<User[]>(mockStudents);
   const [formData, setFormData] = useState({
     studentId: '',
     title: '',
@@ -23,6 +25,48 @@ const ActivityAdd: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const BACKEND_URL = import.meta.env.VITE_Backend_Url;
+
+  // Fetch students from backend
+  const fetchStudents = async () => {
+    try {
+      const token = localStorage.getItem('attendance_app_token');
+      const response = await axios.get(`${BACKEND_URL}students`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.data.success) {
+        const apiStudents = response.data.data.map((student: any) => ({
+          id: student._id,
+          name: student.name,
+          email: student.email,
+          rollNumber: student.rollNumber,
+          class: student.class,
+        }));
+        setStudents(apiStudents);
+      }
+    } catch (error) {
+      console.error('Error fetching students:', error);
+      // Keep using mock students as fallback
+    }
+  };
+
+  useEffect(() => {
+    fetchStudents();
+
+    // Listen for data updates from other pages
+    const handleDataUpdate = () => {
+      fetchStudents();
+    };
+
+    window.addEventListener('dataUpdated', handleDataUpdate);
+
+    return () => {
+      window.removeEventListener('dataUpdated', handleDataUpdate);
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,41 +83,54 @@ const ActivityAdd: React.FC = () => {
 
     setIsSubmitting(true);
 
-    // Simulate API delay
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    try {
+      const token = localStorage.getItem('attendance_app_token');
+      const response = await axios.post(
+        `${BACKEND_URL}activity/add`,
+        {
+          studentId: formData.studentId,
+          title: formData.title,
+          description: formData.description,
+          category: formData.category,
+          date: formData.date,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
-    // Get existing activities
-    const storedActivities = localStorage.getItem('activity_records');
-    const activities: Activity[] = storedActivities
-      ? JSON.parse(storedActivities)
-      : mockActivities;
+      if (response.data.success) {
+        // Trigger dashboard refresh
+        window.dispatchEvent(new Event('dataUpdated'));
 
-    // Find student name
-    const student = mockStudents.find((s) => s.id === formData.studentId);
+        toast({
+          title: "Activity added!",
+          description: `"${formData.title}" has been recorded successfully.`,
+        });
 
-    // Create new activity
-    const newActivity: Activity = {
-      id: `act_${Date.now()}`,
-      studentId: formData.studentId,
-      studentName: student?.name || 'Unknown',
-      title: formData.title,
-      description: formData.description,
-      category: formData.category,
-      date: formData.date,
-      createdAt: new Date().toISOString().split('T')[0],
-    };
+        // Reset form
+        setFormData({
+          studentId: '',
+          title: '',
+          description: '',
+          category: '',
+          date: new Date().toISOString().split('T')[0],
+        });
 
-    // Save to localStorage
-    activities.unshift(newActivity);
-    localStorage.setItem('activity_records', JSON.stringify(activities));
-
-    toast({
-      title: "Activity added!",
-      description: `"${formData.title}" has been recorded successfully.`,
-    });
-
-    setIsSubmitting(false);
-    navigate('/activity/list');
+        navigate('/activity/list');
+      }
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.message || 'Failed to add activity';
+      toast({
+        title: 'Error',
+        description: errorMsg,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -118,7 +175,7 @@ const ActivityAdd: React.FC = () => {
                     <SelectValue placeholder="Select a student" />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockStudents.map((student) => (
+                    {students.map((student) => (
                       <SelectItem key={student.id} value={student.id}>
                         {student.name}
                       </SelectItem>

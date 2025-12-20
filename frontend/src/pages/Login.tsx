@@ -7,13 +7,21 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Axis3DIcon, BookOpen, Loader2 } from 'lucide-react';
+import { BookOpen, Loader2 } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 const Login: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [role, setRole] = useState<'student' | 'teacher' | 'admin'>('student');
   const [isLoading, setIsLoading] = useState(false);
   const { login, register } = useAuth();
   const navigate = useNavigate();
@@ -28,10 +36,8 @@ const Login: React.FC = () => {
     try {
       if (isLogin) {
           const loginResponse = await axios.post(`${BACKEND_URL}auth/login`, {
-            name: name.trim(),
             email: email.trim(),
             password,
-            role: 'teacher',
           });
         if (loginResponse.status === 201 || loginResponse.status === 200) {
             if (loginResponse.data.data) {
@@ -40,16 +46,11 @@ const Login: React.FC = () => {
               localStorage.setItem('attendance_app_token', loginResponse.data.token);
               
               toast({
-                title: "Account created!",
-                description: "You have been registered and logged in.",
+                title: "Welcome back!",
+                description: "You have successfully logged in.",
               });
               navigate('/dashboard');
             }
-          toast({
-            title: "Welcome back!",
-            description: "You have successfully logged in.",
-          });
-          navigate('/dashboard');
         } else {
           toast({
             title: "Login failed",
@@ -67,18 +68,39 @@ const Login: React.FC = () => {
           setIsLoading(false);
           return;
         }
+        
+        if (!email.trim()) {
+          toast({
+            title: "Email required",
+            description: "Please enter your email.",
+            variant: "destructive",
+          });
+          setIsLoading(false);
+          return;
+        }
+
+        if (!password) {
+          toast({
+            title: "Password required",
+            description: "Please enter a password (minimum 6 characters).",
+            variant: "destructive",
+          });
+          setIsLoading(false);
+          return;
+        }
+
         try {
           const response = await axios.post(`${BACKEND_URL}auth/register`, {
             name: name.trim(),
-            email: email.trim(),
+            email: email.trim().toLowerCase(),
             password,
-            role: 'teacher',
+            role: role,
           });
 
           if (response.status === 201 || response.status === 200) {
             // Auto-login after registration
             const loginResponse = await axios.post(`${BACKEND_URL}auth/login`, {
-              email: email.trim(),
+              email: email.trim().toLowerCase(),
               password,
             });
 
@@ -87,15 +109,21 @@ const Login: React.FC = () => {
               localStorage.setItem('attendance_app_user', JSON.stringify(user));
               localStorage.setItem('attendance_app_token', loginResponse.data.token);
               
+              // Reset form
+              setName('');
+              setEmail('');
+              setPassword('');
+              setRole('student');
+              
               toast({
                 title: "Account created!",
-                description: "You have been registered and logged in.",
+                description: "Welcome! You have been registered and logged in.",
               });
               navigate('/dashboard');
             }
           }
         } catch (error: any) {
-          const errorMessage = error.response?.data?.message || 'Email already exists. Please try a different email.';
+          const errorMessage = error.response?.data?.message || 'Registration failed. Please try again.';
           toast({
             title: "Registration failed",
             description: errorMessage,
@@ -162,6 +190,20 @@ const Login: React.FC = () => {
                   />
                 </div>
               )}
+
+              <div className="space-y-2">
+                <Label htmlFor="role">Select Role</Label>
+                <Select value={role} onValueChange={(value: any) => setRole(value)}>
+                  <SelectTrigger id="role">
+                    <SelectValue placeholder="Select your role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="student">Student</SelectItem>
+                    <SelectItem value="teacher">Teacher</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>

@@ -45,3 +45,34 @@ export interface DashboardStats {
   totalActivities: number;
   attendanceRate: number;
 }
+
+// Curriculum & Syllabus types
+export interface Subject {
+  id: string;
+  name: string;
+  code: string;
+  teacherId: string;
+  totalTopics: number;
+  completedTopics: number;
+  createdAt: string;
+}
+
+export interface CurriculumTopic {
+  id: string;
+  subjectId: string;
+  topicName: string;
+  description: string;
+  isCompleted: boolean;
+  completedDate?: string;
+  createdAt: string;
+}
+
+export interface Certificate {
+  id: string;
+  studentId: string;
+  studentName: string;
+  activityTitle: string;
+  issueDate: string;
+  certificateUrl: string;
+  createdAt: string;
+}

@@ -4,17 +4,18 @@ const mongoose = require('mongoose');
 const attendanceSchema = new mongoose.Schema({
   studentId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: [true, 'Student ID is required']
+    ref: 'Student',
+    required: [true, 'Student ID is required'],
+    index: true
   },
   date: {
     type: Date,
     required: [true, 'Date is required'],
-    default: Date.now
+    index: true
   },
   status: {
     type: String,
-    enum: ['present', 'absent', 'late'],
+    enum: ['Present', 'Absent', 'Late'],
     required: [true, 'Status is required']
   },
   markedBy: {
@@ -26,7 +27,7 @@ const attendanceSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Compound index to prevent duplicate attendance for same student on same date
-attendanceSchema.index({ studentId: 1, date: 1 }, { unique: true });
+// Compound index on studentId and date
+attendanceSchema.index({ studentId: 1, date: 1 });
 
 module.exports = mongoose.model('Attendance', attendanceSchema);

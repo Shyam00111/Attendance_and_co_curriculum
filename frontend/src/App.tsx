@@ -7,11 +7,19 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
+import StudentStats from "./pages/StudentStats";
+import ManageStudents from "./pages/ManageStudents";
+import ManageCurriculum from "./pages/ManageCurriculum";
+import ManageCertificates from "./pages/ManageCertificates";
+import Chatbot from "./pages/Chatbot";
+import ExportReports from "./pages/ExportReports";
+import NotificationCenter from "./pages/NotificationCenter";
 import AttendanceMark from "./pages/AttendanceMark";
 import AttendanceReport from "./pages/AttendanceReport";
 import ActivityAdd from "./pages/ActivityAdd";
 import ActivityList from "./pages/ActivityList";
 import NotFound from "./pages/NotFound";
+import StudentSubjects from "./pages/StudentSubjects";
 
 const queryClient = new QueryClient();
 
@@ -38,6 +46,62 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/student-stats"
+        element={
+          <ProtectedRoute>
+            <StudentStats />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/students"
+        element={
+          <ProtectedRoute>
+            <ManageStudents />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/curriculum"
+        element={
+          <ProtectedRoute>
+            <ManageCurriculum />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/certificates"
+        element={
+          <ProtectedRoute>
+            <ManageCertificates />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/chatbot"
+        element={
+          <ProtectedRoute>
+            <Chatbot />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/export"
+        element={
+          <ProtectedRoute>
+            <ExportReports />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/notifications"
+        element={
+          <ProtectedRoute>
+            <NotificationCenter />
           </ProtectedRoute>
         }
       />
@@ -70,6 +134,14 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <ActivityList />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/student-subjects"
+        element={
+          <ProtectedRoute>
+            <StudentSubjects />
           </ProtectedRoute>
         }
       />

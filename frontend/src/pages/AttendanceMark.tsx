@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,7 +12,7 @@ import { UserCheck, UserX, Clock, Search, Save, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const AttendanceMark: React.FC = () => {
-  const [students] = useState<User[]>(mockStudents);
+  const [students, setStudents] = useState<User[]>(mockStudents);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDate, setSelectedDate] = useState(
     new Date().toISOString().split('T')[0]
@@ -21,8 +22,51 @@ const AttendanceMark: React.FC = () => {
   >({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+  const BACKEND_URL = import.meta.env.VITE_Backend_Url;
+
+  // Fetch students from backend
+  const fetchStudents = async () => {
+    try {
+      const token = localStorage.getItem('attendance_app_token');
+      const response = await axios.get(`${BACKEND_URL}students`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.data.success) {
+        const apiStudents = response.data.data.map((student: any) => ({
+          id: student._id,  // Map MongoDB _id to id for internal use
+          _id: student._id, // Keep _id for API calls
+          name: student.name,
+          email: student.email,
+          rollNumber: student.rollNumber,
+          class: student.class,
+        }));
+        setStudents(apiStudents);
+      }
+    } catch (error) {
+      console.error('Error fetching students:', error);
+      // Keep using mock students as fallback
+    }
+  };
 
   // Load existing attendance for the selected date
+  useEffect(() => {
+    fetchStudents();
+    
+    // Listen for data updates from other pages
+    const handleDataUpdate = () => {
+      fetchStudents();
+    };
+    
+    window.addEventListener('dataUpdated', handleDataUpdate);
+    
+    return () => {
+      window.removeEventListener('dataUpdated', handleDataUpdate);
+    };
+  }, []);
+
   useEffect(() => {
     const storedAttendance = localStorage.getItem('attendance_records');
     const allAttendance: Attendance[] = storedAttendance
@@ -52,43 +96,60 @@ const AttendanceMark: React.FC = () => {
   };
 
   const handleSubmit = async () => {
+    if (Object.keys(attendanceMap).length === 0) {
+      toast({
+        title: 'No attendance marked',
+        description: 'Please mark attendance for at least one student',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsSubmitting(true);
 
-    // Simulate API delay
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    try {
+      const token = localStorage.getItem('attendance_app_token');
+      
+      // Convert attendanceMap to records array
+      const records = Object.entries(attendanceMap).map(([studentId, status]) => ({
+        studentId,
+        date: selectedDate,
+        status: status === 'present' ? 'Present' : status === 'absent' ? 'Absent' : 'Late',
+      }));
 
-    // Get existing records
-    const storedAttendance = localStorage.getItem('attendance_records');
-    let allAttendance: Attendance[] = storedAttendance
-      ? JSON.parse(storedAttendance)
-      : [];
+      const response = await axios.post(
+        `${BACKEND_URL}attendance/mark`,
+        { records },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
-    // Remove existing records for the selected date
-    allAttendance = allAttendance.filter((a) => a.date !== selectedDate);
+      if (response.data.success) {
+        // Trigger dashboard refresh
+        window.dispatchEvent(new Event('dataUpdated'));
 
-    // Add new records
-    const newRecords: Attendance[] = Object.entries(attendanceMap).map(
-      ([studentId, status]) => {
-        const student = students.find((s) => s.id === studentId);
-        return {
-          id: `att_${Date.now()}_${studentId}`,
-          studentId,
-          studentName: student?.name || 'Unknown',
-          date: selectedDate,
-          status,
-        };
+        toast({
+          title: 'Attendance saved!',
+          description: `Recorded attendance for ${records.length} students on ${selectedDate}.`,
+        });
+
+        // Reset the form
+        setAttendanceMap({});
       }
-    );
-
-    allAttendance = [...allAttendance, ...newRecords];
-    localStorage.setItem('attendance_records', JSON.stringify(allAttendance));
-
-    toast({
-      title: "Attendance saved!",
-      description: `Recorded attendance for ${newRecords.length} students on ${selectedDate}.`,
-    });
-
-    setIsSubmitting(false);
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.message || 'Failed to save attendance';
+      toast({
+        title: 'Error',
+        description: errorMsg,
+        variant: 'destructive',
+      });
+      console.error('Attendance error:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const getButtonStyle = (

@@ -1,5 +1,6 @@
 // controllers/attendanceController.js
 const Attendance = require('../models/Attendance');
+const Student = require('../models/Student');
 const User = require('../models/User');
 
 // @desc    Mark attendance for students
@@ -8,6 +9,10 @@ const User = require('../models/User');
 const markAttendance = async (req, res) => {
   try {
     const { records } = req.body;
+    console.log('=== ATTENDANCE MARK REQUEST ===');
+    console.log('Records received:', JSON.stringify(records));
+    console.log('User ID:', req.user.id);
+    
     // records: [{ studentId, date, status }]
 
     if (!records || !Array.isArray(records) || records.length === 0) {
@@ -21,10 +26,13 @@ const markAttendance = async (req, res) => {
 
     for (const record of records) {
       const { studentId, date, status } = record;
+      console.log(`\nProcessing record: studentId=${studentId}, date=${date}, status=${status}`);
 
       // Validate student exists
-      const student = await User.findById(studentId);
-      if (!student || student.role !== 'student') {
+      const student = await Student.findById(studentId);
+      console.log('Student found:', student ? student.name : 'NOT FOUND');
+      
+      if (!student) {
         results.push({
           studentId,
           success: false,
@@ -33,20 +41,43 @@ const markAttendance = async (req, res) => {
         continue;
       }
 
-      // Create or update attendance
-      const attendanceDate = new Date(date);
-      attendanceDate.setHours(0, 0, 0, 0);
+      // Parse and normalize the date (remove time component)
+      let attendanceDate = new Date(date);
+      console.log('Original date:', date);
+      console.log('Parsed date object:', attendanceDate);
+      
+      attendanceDate = new Date(attendanceDate.getFullYear(), attendanceDate.getMonth(), attendanceDate.getDate());
+      console.log('Normalized date:', attendanceDate);
 
-      const attendance = await Attendance.findOneAndUpdate(
-        { studentId, date: attendanceDate },
-        {
-          studentId,
+      // First try to find existing record
+      console.log('Searching for existing attendance...');
+      let attendance = await Attendance.findOne({
+        studentId: studentId,
+        date: attendanceDate
+      });
+      
+      console.log('Existing attendance found:', attendance ? 'YES' : 'NO');
+
+      if (attendance) {
+        // Update existing record
+        console.log('Updating existing record...');
+        attendance.status = status;
+        attendance.markedBy = req.user.id;
+        await attendance.save();
+        console.log('Updated attendance:', attendance);
+      } else {
+        // Create new record
+        console.log('Creating new attendance record...');
+        attendance = new Attendance({
+          studentId: studentId,
           date: attendanceDate,
-          status,
+          status: status,
           markedBy: req.user.id
-        },
-        { upsert: true, new: true, runValidators: true }
-      );
+        });
+        console.log('New attendance object created:', attendance);
+        await attendance.save();
+        console.log('New attendance saved:', attendance);
+      }
 
       results.push({
         studentId,
@@ -55,11 +86,17 @@ const markAttendance = async (req, res) => {
       });
     }
 
+    console.log('=== FINAL RESULTS ===');
+    console.log(JSON.stringify(results, null, 2));
+    
     res.status(200).json({
       success: true,
       data: results
     });
   } catch (error) {
+    console.error('=== ATTENDANCE ERROR ===');
+    console.error('Error:', error);
+    console.error('Stack:', error.stack);
     res.status(500).json({
       success: false,
       message: error.message

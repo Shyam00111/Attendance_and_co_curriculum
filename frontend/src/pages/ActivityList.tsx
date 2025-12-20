@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import axios from 'axios';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -27,19 +28,61 @@ const ActivityList: React.FC = () => {
   const [filteredActivities, setFilteredActivities] = useState<Activity[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+  const BACKEND_URL = import.meta.env.VITE_Backend_Url;
+
+  // Fetch activities from backend
+  const fetchActivities = async () => {
+    try {
+      setIsLoading(true);
+      const token = localStorage.getItem('attendance_app_token');
+      const response = await axios.get(`${BACKEND_URL}activity/all`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.data.success) {
+        const data = response.data.data.map((activity: any) => ({
+          id: activity._id,
+          studentId: activity.studentId?._id,
+          studentName: activity.studentId?.name || 'Unknown',
+          title: activity.title,
+          description: activity.description,
+          category: activity.category,
+          date: activity.date,
+        }));
+
+        // Sort by date descending
+        data.sort((a: Activity, b: Activity) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setActivities(data);
+        setFilteredActivities(data);
+      }
+    } catch (error) {
+      console.error('Error fetching activities:', error);
+      // Fallback to mock data
+      setActivities(mockActivities);
+      setFilteredActivities(mockActivities);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Load activities
   useEffect(() => {
-    const storedActivities = localStorage.getItem('activity_records');
-    const data: Activity[] = storedActivities
-      ? JSON.parse(storedActivities)
-      : mockActivities;
+    fetchActivities();
 
-    // Sort by date descending
-    data.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    setActivities(data);
-    setFilteredActivities(data);
+    // Listen for data updates
+    const handleDataUpdate = () => {
+      fetchActivities();
+    };
+
+    window.addEventListener('dataUpdated', handleDataUpdate);
+
+    return () => {
+      window.removeEventListener('dataUpdated', handleDataUpdate);
+    };
   }, []);
 
   // Apply filters
@@ -64,14 +107,39 @@ const ActivityList: React.FC = () => {
     setFilteredActivities(filtered);
   }, [activities, searchTerm, categoryFilter]);
 
-  const handleDelete = (activityId: string) => {
-    const updatedActivities = activities.filter((a) => a.id !== activityId);
-    setActivities(updatedActivities);
-    localStorage.setItem('activity_records', JSON.stringify(updatedActivities));
-    toast({
-      title: "Activity deleted",
-      description: "The activity has been removed.",
-    });
+  const handleDelete = async (activityId: string) => {
+    try {
+      const token = localStorage.getItem('attendance_app_token');
+      const response = await axios.delete(
+        `${BACKEND_URL}activity/${activityId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.data.success) {
+        // Trigger dashboard refresh
+        window.dispatchEvent(new Event('dataUpdated'));
+
+        toast({
+          title: "Activity deleted",
+          description: "The activity has been removed.",
+        });
+
+        // Update local state
+        const updatedActivities = activities.filter((a) => a.id !== activityId);
+        setActivities(updatedActivities);
+      }
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.message || 'Failed to delete activity';
+      toast({
+        title: 'Error',
+        description: errorMsg,
+        variant: 'destructive',
+      });
+    }
   };
 
   const getCategoryColor = (category: string) => {

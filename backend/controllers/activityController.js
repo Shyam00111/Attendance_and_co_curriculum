@@ -1,5 +1,6 @@
 // controllers/activityController.js
 const Activity = require('../models/Activity');
+const Student = require('../models/Student');
 const User = require('../models/User');
 
 // @desc    Add a new activity
@@ -8,9 +9,15 @@ const User = require('../models/User');
 const addActivity = async (req, res) => {
   try {
     const { studentId, title, description, category, date } = req.body;
+    
+    console.log('=== ADD ACTIVITY REQUEST ===');
+    console.log('Body:', { studentId, title, description, category, date });
+    console.log('User ID:', req.user.id);
 
     // Validate student exists
-    const student = await User.findById(studentId);
+    const student = await Student.findById(studentId);
+    console.log('Student found:', student ? student.name : 'NOT FOUND');
+    
     if (!student) {
       return res.status(404).json({
         success: false,
@@ -19,6 +26,7 @@ const addActivity = async (req, res) => {
     }
 
     // Create activity
+    console.log('Creating activity with data:', { studentId, title, description, category, date, addedBy: req.user.id });
     const activity = await Activity.create({
       studentId,
       title,
@@ -28,14 +36,20 @@ const addActivity = async (req, res) => {
       addedBy: req.user.id
     });
 
+    console.log('Activity created:', activity);
+
     // Populate student info
     await activity.populate('studentId', 'name email');
+    console.log('Activity after populate:', activity);
 
     res.status(201).json({
       success: true,
       data: activity
     });
   } catch (error) {
+    console.error('=== ACTIVITY ERROR ===');
+    console.error('Error:', error.message);
+    console.error('Stack:', error.stack);
     res.status(500).json({
       success: false,
       message: error.message

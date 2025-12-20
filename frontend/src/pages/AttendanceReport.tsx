@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,18 +17,58 @@ const AttendanceReport: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [dateFilter, setDateFilter] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const BACKEND_URL = import.meta.env.VITE_Backend_Url;
+
+  // Fetch attendance from backend
+  const fetchAttendance = async () => {
+    try {
+      setIsLoading(true);
+      const token = localStorage.getItem('attendance_app_token');
+      const response = await axios.get(`${BACKEND_URL}attendance/report`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.data.success) {
+        const data = response.data.data.map((att: any) => ({
+          id: att._id,
+          studentId: att.studentId?._id,
+          studentName: att.studentId?.name || 'Unknown',
+          date: new Date(att.date).toLocaleDateString(),
+          status: att.status.toLowerCase() as any,
+        }));
+
+        // Sort by date descending
+        data.sort((a: Attendance, b: Attendance) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setAttendance(data);
+        setFilteredAttendance(data);
+      }
+    } catch (error) {
+      console.error('Error fetching attendance:', error);
+      // Fallback to mock data
+      setAttendance(mockAttendance);
+      setFilteredAttendance(mockAttendance);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Load attendance data
   useEffect(() => {
-    const storedAttendance = localStorage.getItem('attendance_records');
-    const data: Attendance[] = storedAttendance
-      ? JSON.parse(storedAttendance)
-      : mockAttendance;
-    
-    // Sort by date descending
-    data.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    setAttendance(data);
-    setFilteredAttendance(data);
+    fetchAttendance();
+
+    // Listen for data updates
+    const handleDataUpdate = () => {
+      fetchAttendance();
+    };
+
+    window.addEventListener('dataUpdated', handleDataUpdate);
+
+    return () => {
+      window.removeEventListener('dataUpdated', handleDataUpdate);
+    };
   }, []);
 
   // Apply filters
@@ -59,10 +100,13 @@ const AttendanceReport: React.FC = () => {
   const getStatusBadge = (status: Attendance['status']) => {
     switch (status) {
       case 'present':
+      case 'Present':
         return <Badge className="bg-success/10 text-success hover:bg-success/20">Present</Badge>;
       case 'absent':
+      case 'Absent':
         return <Badge className="bg-destructive/10 text-destructive hover:bg-destructive/20">Absent</Badge>;
       case 'late':
+      case 'Late':
         return <Badge className="bg-warning/10 text-warning hover:bg-warning/20">Late</Badge>;
     }
   };

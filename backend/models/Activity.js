@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 const activitySchema = new mongoose.Schema({
   studentId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    ref: 'Student',
     required: [true, 'Student ID is required']
   },
   title: {

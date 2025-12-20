@@ -19,19 +19,27 @@ const register = async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
 
-    // Check if user already exists
-    const existingUser = await User.findOne({ email });
+    // Validate required fields
+    if (!name || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide name, email, and password'
+      });
+    }
+
+    // Check if user already exists (case-insensitive)
+    const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
     if (existingUser) {
       return res.status(400).json({
         success: false,
-        message: 'User already exists with this email'
+        message: 'This email is already registered. Please use login instead.'
       });
     }
 
     // Create user
     const user = await User.create({
-      name,
-      email,
+      name: name.trim(),
+      email: email.toLowerCase().trim(),
       password,
       role: role || 'student'
     });
@@ -50,9 +58,17 @@ const register = async (req, res) => {
       token
     });
   } catch (error) {
+    // Handle MongoDB duplicate key error
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'This email is already registered. Please use login instead.'
+      });
+    }
+    
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message || 'Registration failed. Please try again.'
     });
   }
 };

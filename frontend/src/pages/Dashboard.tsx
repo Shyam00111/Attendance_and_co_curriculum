@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import axios from 'axios';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import StatsCard from '@/components/StatsCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,62 +28,144 @@ const Dashboard: React.FC = () => {
   });
   const [recentAttendance, setRecentAttendance] = useState<Attendance[]>([]);
   const [recentActivities, setRecentActivities] = useState<Activity[]>([]);
+  const BACKEND_URL = import.meta.env.VITE_Backend_Url;
 
   useEffect(() => {
-    // Load data from localStorage or use mock data
-    const storedAttendance = localStorage.getItem('attendance_records');
-    const storedActivities = localStorage.getItem('activity_records');
-
-    const attendance: Attendance[] = storedAttendance
-      ? JSON.parse(storedAttendance)
-      : mockAttendance;
-    const activities: Activity[] = storedActivities
-      ? JSON.parse(storedActivities)
-      : mockActivities;
-
-    // Calculate stats
-    const today = new Date().toISOString().split('T')[0];
-    const todayAttendance = attendance.filter((a) => a.date === today);
-    const present = todayAttendance.filter((a) => a.status === 'present' || a.status === 'late').length;
-    const absent = todayAttendance.filter((a) => a.status === 'absent').length;
-    const rate = todayAttendance.length > 0
-      ? Math.round((present / todayAttendance.length) * 100)
-      : 0;
-
-    setStats({
-      totalStudents: mockStudents.length,
-      presentToday: present,
-      absentToday: absent,
-      totalActivities: activities.length,
-      attendanceRate: rate,
-    });
-
-    setRecentAttendance(attendance.slice(0, 5));
-    setRecentActivities(activities.slice(0, 4));
+    fetchDashboardData();
+    
+    // Listen for data updates from other pages
+    const handleDataUpdate = () => {
+      fetchDashboardData();
+    };
+    
+    window.addEventListener('dataUpdated', handleDataUpdate);
+    
+    // Refetch data when user returns to the page (visibility change)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchDashboardData();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Refetch data every 30 seconds to keep stats updated
+    const interval = setInterval(fetchDashboardData, 30000);
+    
+    return () => {
+      window.removeEventListener('dataUpdated', handleDataUpdate);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(interval);
+    };
   }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      const token = localStorage.getItem('attendance_app_token');
+      
+      // Fetch students and subjects from backend
+      const [studentsRes, activitiesRes, attendanceRes] = await Promise.all([
+        axios.get(`${BACKEND_URL}students`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch(() => ({ data: { data: [] } })),
+        axios.get(`${BACKEND_URL}activity/all`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch(() => ({ data: { data: [] } })),
+        axios.get(`${BACKEND_URL}attendance/report`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch(() => ({ data: { data: [] } })),
+      ]);
+
+      const students = studentsRes.data.data || [];
+      const activities = activitiesRes.data.data || [];
+      const attendance = attendanceRes.data.data || [];
+
+      // Create a set of valid student IDs for filtering
+      const validStudentIds = new Set(students.map((s: any) => s._id));
+
+      // Calculate stats - only count attendance for existing students
+      const today = new Date().toISOString().split('T')[0];
+      const todayAttendance = attendance.filter((a: any) => 
+        a.date?.split('T')[0] === today && validStudentIds.has(a.studentId?._id)
+      );
+      const present = todayAttendance.filter((a: any) => a.status === 'Present' || a.status === 'late').length;
+      const absent = todayAttendance.filter((a: any) => a.status === 'Absent').length;
+      const rate = todayAttendance.length > 0
+        ? Math.round((present / todayAttendance.length) * 100)
+        : 0;
+
+      setStats({
+        totalStudents: students.length,
+        presentToday: present,
+        absentToday: absent,
+        totalActivities: activities.length,
+        attendanceRate: rate,
+      });
+
+      // Format recent attendance - only show records for existing students
+      const formattedAttendance = attendance
+        .filter((a: any) => a.studentId?.name && validStudentIds.has(a.studentId?._id))
+        .slice(0, 5)
+        .map((a: any) => ({
+          id: a._id,
+          studentName: a.studentId?.name,
+          date: new Date(a.date).toLocaleDateString(),
+          status: a.status.toLowerCase() as any,
+        }));
+      setRecentAttendance(formattedAttendance);
+
+      // Format recent activities - only show records for existing students
+      const formattedActivities = activities
+        .filter((a: any) => a.studentId?.name && validStudentIds.has(a.studentId?._id))
+        .slice(0, 4)
+        .map((a: any) => ({
+          id: a._id,
+          title: a.activityName,
+          studentName: a.studentId?.name,
+          category: a.category,
+        }));
+      setRecentActivities(formattedActivities);
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      // Fallback to mock data
+      setStats({
+        totalStudents: mockStudents.length,
+        presentToday: 0,
+        absentToday: 0,
+        totalActivities: mockActivities.length,
+        attendanceRate: 0,
+      });
+    }
+  };
 
   const getStatusBadge = (status: Attendance['status']) => {
     switch (status) {
       case 'present':
+      case 'Present':
         return <Badge className="bg-success/10 text-success hover:bg-success/20">Present</Badge>;
       case 'absent':
+      case 'Absent':
         return <Badge className="bg-destructive/10 text-destructive hover:bg-destructive/20">Absent</Badge>;
       case 'late':
+      case 'Late':
         return <Badge className="bg-warning/10 text-warning hover:bg-warning/20">Late</Badge>;
     }
   };
 
   return (
     <DashboardLayout>
-      <div className="space-y-8">
-        {/* Header */}
-        <div>
-          <h1 className="font-display text-3xl font-bold text-foreground">
-            Dashboard
-          </h1>
-          <p className="mt-1 text-muted-foreground">
-            Overview of attendance and co-curriculum activities
-          </p>
+      <div className="space-y-8 animate-fade-in">
+        {/* Enhanced Header with Gradient */}
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-primary/20 via-accent/20 to-primary/20 p-8 glass border border-primary/20">
+          <div className="relative z-10">
+            <h1 className="font-display text-4xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+              Welcome Back!
+            </h1>
+            <p className="mt-2 text-lg text-muted-foreground">
+              Overview of attendance and co-curriculum activities
+            </p>
+          </div>
+          <div className="absolute -right-20 -top-20 h-40 w-40 rounded-full bg-primary/10 blur-3xl animate-pulse-soft" />
         </div>
 
         {/* Stats Grid */}
@@ -118,39 +201,39 @@ const Dashboard: React.FC = () => {
         {/* Quick Actions */}
         <div className="grid gap-4 sm:grid-cols-2">
           <Link to="/attendance/mark">
-            <Card className="cursor-pointer transition-all duration-200 hover:shadow-elevated hover:ring-2 hover:ring-primary/20">
+            <Card className="hover-lift glass cursor-pointer border-primary/20 group">
               <CardContent className="flex items-center gap-4 p-6">
-                <div className="flex h-14 w-14 items-center justify-center rounded-xl gradient-primary shadow-glow">
+                <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent shadow-glow group-hover:scale-110 transition-transform duration-300">
                   <ClipboardCheck className="h-7 w-7 text-primary-foreground" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-display font-semibold text-foreground">
+                  <h3 className="font-display font-semibold text-foreground group-hover:text-primary transition-colors">
                     Mark Attendance
                   </h3>
                   <p className="text-sm text-muted-foreground">
                     Record today's student attendance
                   </p>
                 </div>
-                <ArrowRight className="h-5 w-5 text-muted-foreground" />
+                <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:translate-x-1 transition-transform" />
               </CardContent>
             </Card>
           </Link>
 
           <Link to="/activity/add">
-            <Card className="cursor-pointer transition-all duration-200 hover:shadow-elevated hover:ring-2 hover:ring-primary/20">
+            <Card className="hover-lift glass cursor-pointer border-warning/20 group">
               <CardContent className="flex items-center gap-4 p-6">
-                <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-warning text-warning-foreground">
-                  <Trophy className="h-7 w-7" />
+                <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-warning to-accent shadow-glow group-hover:scale-110 transition-transform duration-300">
+                  <Trophy className="h-7 w-7 text-warning-foreground" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-display font-semibold text-foreground">
+                  <h3 className="font-display font-semibold text-foreground group-hover:text-warning transition-colors">
                     Add Activity
                   </h3>
                   <p className="text-sm text-muted-foreground">
                     Submit a new co-curriculum activity
                   </p>
                 </div>
-                <ArrowRight className="h-5 w-5 text-muted-foreground" />
+                <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:translate-x-1 transition-transform" />
               </CardContent>
             </Card>
           </Link>
@@ -159,7 +242,7 @@ const Dashboard: React.FC = () => {
         {/* Recent Data Grid */}
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Recent Attendance */}
-          <Card>
+          <Card className="hover-lift glass border-primary/20">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-lg">Recent Attendance</CardTitle>
               <Link to="/attendance/report">
@@ -198,7 +281,7 @@ const Dashboard: React.FC = () => {
           </Card>
 
           {/* Recent Activities */}
-          <Card>
+          <Card className="hover-lift glass border-accent/20">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-lg">Recent Activities</CardTitle>
               <Link to="/activity/list">
