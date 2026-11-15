@@ -1,0 +1,78 @@
+---
+# Declarative Pipeline for Jenkins
+# This file contains Jenkins configuration and setup instructions
+
+# Jenkins System Configuration
+# Location: Manage Jenkins → Configure System
+
+# Global Configuration Properties:
+# - Jenkins URL: http://jenkins.your-domain.com/
+# - System Admin E-mail Address: admin@your-domain.com
+
+# SMTP Configuration:
+# - SMTP server: smtp.gmail.com (or your mail server)
+# - SMTP Port: 587
+# - Use Authentication: Yes
+# - SMTP Username: your-email@gmail.com
+# - SMTP Password: your-app-password
+# - Use TLS: Yes
+
+# AWS Plugin Configuration
+# Location: Manage Jenkins → Configure System → AWS
+
+amazon:
+  region: "us-east-1"
+  accessKey: "${AWS_ACCESS_KEY_ID}"
+  secretKey: "${AWS_SECRET_ACCESS_KEY}"
+
+# Kubernetes Plugin Configuration
+# Location: Manage Jenkins → Configure System → Cloud → Kubernetes
+
+kubernetes:
+  name: "kubernetes"
+  serverUrl: "https://attendance-cluster-endpoint.us-east-1.eks.amazonaws.com"
+  certificateAuthority: "${K8S_CERTIFICATE_AUTHORITY}"
+  clientKey: "${K8S_CLIENT_KEY}"
+  clientCertificate: "${K8S_CLIENT_CERTIFICATE}"
+  serverCertificateValidation: "DISABLE"
+  namespace: "jenkins"
+  jenkinsUrl: "http://jenkins.jenkins.svc.cluster.local:8080"
+  jenkinsTunnel: "jenkins-agent.jenkins.svc.cluster.local:50000"
+
+  # Pod Template Configuration
+  podTemplates:
+    - name: "default"
+      namespace: "jenkins"
+      labels: "jenkins=agent"
+      containers:
+        - name: "docker"
+          image: "docker:latest"
+          alwaysPullImage: true
+          volumeMounts:
+            - mountPath: "/var/run/docker.sock"
+              name: "docker-socket"
+        - name: "kubectl"
+          image: "bitnami/kubectl:latest"
+          alwaysPullImage: true
+      volumes:
+        - name: "docker-socket"
+          hostPath:
+            path: "/var/run/docker.sock"
+
+# SonarQube Configuration
+# Location: Manage Jenkins → Configure System → SonarQube Servers
+
+sonarqube:
+  name: "SonarQube"
+  serverUrl: "http://sonarqube.your-domain.com"
+  serverAuthenticationToken: "${SONARQUBE_TOKEN}"
+  triggers: "true"
+
+# GitHub Configuration
+# Location: Manage Jenkins → Configure System → GitHub
+
+github:
+  clientID: "${GITHUB_CLIENT_ID}"
+  clientSecret: "${GITHUB_CLIENT_SECRET}"
+  oauth: true
+  apiUrl: "https://api.github.com"
